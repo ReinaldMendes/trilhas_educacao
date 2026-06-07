@@ -8,7 +8,13 @@ import { audit } from '../../utils/audit'
 const router = Router()
 router.use(authenticate)
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  }
+  return _openai
+}
 
 const SYSTEM_PROMPT = `Você é um assistente pedagógico especializado em Educação Infantil.
 Seu papel é ajudar professoras a organizar suas observações em pareceres descritivos, claros e fundamentados na abordagem da documentação pedagógica.
@@ -83,7 +89,7 @@ router.post('/gerar', authorize('professor','corregente','coordenador'), async (
   res.setHeader('Connection', 'keep-alive')
 
   try {
-    const stream = await openai.chat.completions.create({
+    const stream = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.4,
       max_tokens: 1500,
