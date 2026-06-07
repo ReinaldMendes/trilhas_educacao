@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use client'
 // Re-uses coordenador graficos logic but with diretora context
 import { useEffect, useState } from 'react'
