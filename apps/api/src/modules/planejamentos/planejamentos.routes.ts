@@ -73,17 +73,33 @@ router.post('/', authorize('professor','corregente','coordenador'), async (req: 
   const parse = planejamentoSchema.safeParse(req.body)
   if (!parse.success) return res.status(400).json({ error: 'Dados inválidos', details: parse.error.flatten() })
 
-  const { propostas, ...data } = parse.data
+  const {
+    propostas,
+    turmaId,
+    weekStart,
+    camposExperiencia,
+    objetivos,
+    conteudos,
+    mobilizacao,
+    desenvolvimentoPropostas,
+    anotacoesFinais,
+  } = parse.data
   const plano = await prisma.planejamento.create({
     data: {
-      ...data,
-      weekStart: new Date(data.weekStart),
-      professorId: req.user!.sub,
-      status: 'enviado',
+      professorId:              req.user!.sub,
+      turmaId:                  turmaId as string,
+      weekStart:                new Date(weekStart),
+      camposExperiencia:        camposExperiencia ?? [],
+      objetivos:                objetivos ?? null,
+      conteudos:                conteudos ?? null,
+      mobilizacao:              mobilizacao ?? null,
+      desenvolvimentoPropostas: desenvolvimentoPropostas ?? null,
+      anotacoesFinais:          anotacoesFinais ?? null,
+      status:                   'enviado',
       propostas: {
         create: propostas.map((p) => ({
           dayOfWeek: p.dayOfWeek as number,
-          tipo: p.tipo as any,
+          tipo:      p.tipo as any,
           descricao: p.descricao as string,
           modalidade: p.modalidade as any,
         })),
@@ -93,7 +109,7 @@ router.post('/', authorize('professor','corregente','coordenador'), async (req: 
   })
 
   // Notificar coordenadores da unidade
-  const turma = await prisma.turma.findUnique({ where: { id: data.turmaId }, include: { unidade: { include: { coordenadores: true } } } })
+  const turma = await prisma.turma.findUnique({ where: { id: turmaId as string }, include: { unidade: { include: { coordenadores: true } } } })
   if (turma) {
     const coordIds = turma.unidade.coordenadores.map((c) => c.userId)
     await Promise.all(coordIds.map((uid) =>
