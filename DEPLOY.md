@@ -4,26 +4,32 @@
 
 ## Backend → Railway
 
-### ⚠️ IMPORTANTE: Configurar Root Directory como `apps/api`
+### Configurações EXATAS do painel (conforme screenshots)
 
-O Railway precisa apontar para a pasta da API, não para a raiz do monorepo.
-
-### Passo a passo:
-
-1. Acesse https://railway.app/new
-2. **Deploy from GitHub repo** → selecione `trilhas_educacao`
-3. Antes de confirmar, clique em **Settings** e configure:
-
+#### 📁 Source (aba Source)
 ```
-Root Directory:  apps/api       ← OBRIGATÓRIO
+Source Repo:       ReinaldMendes/trilhas_educacao
+Root Directory:    apps/api          ← SEM barra inicial (não /apps/api)
+Branch:            main
 ```
 
-4. Adicione um **PostgreSQL** database ao projeto (botão "+ New" → Database → PostgreSQL)
-
-5. Variáveis de ambiente no serviço da API:
-
+#### 🔨 Build (aba Build)
 ```
-DATABASE_URL         = (Railway preenche automaticamente do PostgreSQL plugin)
+Builder:           Railpack (Default)   ← manter padrão, NÃO mudar para Dockerfile
+Custom Build Command:
+  npm install && npx prisma generate && npm run build
+```
+
+#### 🚀 Deploy (aba Deploy / Build)
+```
+Custom Start Command:
+  npx prisma migrate deploy && node dist/server.js
+```
+
+#### 🔐 Variables (aba Variables)
+Clique em "+ New Variable" e adicione cada uma:
+```
+DATABASE_URL         = (copie do serviço PostgreSQL → Connect → DATABASE_URL)
 JWT_SECRET           = (gere: openssl rand -hex 64)
 JWT_REFRESH_SECRET   = (gere: openssl rand -hex 64)
 OPENAI_API_KEY       = sk-...
@@ -32,53 +38,57 @@ NODE_ENV             = production
 PORT                 = 3001
 ```
 
-6. Após o primeiro deploy bem-sucedido, rode o seed:
+#### 🌐 Networking (aba Networking)
+- Clique em **"Generate Domain"** para gerar a URL pública da API
+- Anote essa URL — você vai precisar para configurar o Vercel
+
+---
+
+### Por que estava travando em "Processing deployment..."?
+
+O Railway estava usando o **Railpack** builder mas sem comandos de build/start definidos.
+Ele ficava aguardando sem saber o que executar.
+
+Com o arquivo `apps/api/railway.toml` atualizado, os comandos agora estão explícitos:
+- **Build:** `npm install && npx prisma generate && npm run build`
+- **Start:** `npx prisma migrate deploy && node dist/server.js`
+
+---
+
+### Após o primeiro deploy bem-sucedido — Rodar o Seed
 
 ```bash
-# Via Railway CLI
+# Opção 1: Railway CLI
 npm i -g @railway/cli
 railway login
-railway link           # selecione o projeto
-railway run --service=api npx tsx prisma/seed.ts
+railway link    # selecione o projeto e o serviço da API
+railway run npx tsx prisma/seed.ts
+
+# Opção 2: Pelo painel Railway
+# Settings → "Deploy" → clique em "..." → "Run Command"
+# Digite: npx tsx prisma/seed.ts
 ```
 
-### Por que o Root Directory é obrigatório?
-
-O Railway faz scan de vulnerabilidades no `package-lock.json` que encontrar.
-Se apontar para a raiz do monorepo, ele vê o Next.js (frontend) e bloqueia por CVE.
-Apontando para `apps/api`, ele só vê as dependências do backend (Node/Express), que estão limpas.
+Isso cria os usuários de demonstração:
+| Perfil      | E-mail                    | Senha        |
+|-------------|---------------------------|--------------|
+| SME         | sme@trilhas.edu.br        | Trilhas@2026 |
+| Coordenador | coord@trilhas.edu.br      | Trilhas@2026 |
+| Diretora    | diretora@trilhas.edu.br   | Trilhas@2026 |
+| Professora  | prof@trilhas.edu.br       | Trilhas@2026 |
+| Corregente  | corregente@trilhas.edu.br | Trilhas@2026 |
 
 ---
 
 ## Frontend → Vercel
 
-### ⚠️ IMPORTANTE: Configurar Root Directory como `apps/web`
-
-1. Acesse https://vercel.com/new
-2. Importe o repositório `trilhas_educacao`
-3. **Antes de clicar em Deploy**, configure:
-
 ```
-Root Directory:  apps/web       ← OBRIGATÓRIO
+Root Directory:  apps/web       ← OBRIGATÓRIO no painel Vercel
 Framework:       Next.js        ← detectado automaticamente
+
+Environment Variables:
+  NEXT_PUBLIC_API_URL = https://sua-api.up.railway.app
 ```
-
-4. Variáveis de ambiente::
-
-```
-NEXT_PUBLIC_API_URL = https://sua-api.railway.app
-```
-
-5. Clique em **Deploy**
-
----
-
-## Resumo dos Root Directories
-
-| Serviço  | Root Directory | Por quê                                    |
-|----------|----------------|--------------------------------------------|
-| Railway  | `apps/api`     | Só vê deps do backend, sem CVE do Next.js  |
-| Vercel   | `apps/web`     | Next.js precisa ser a raiz do projeto      |
 
 ---
 
@@ -90,41 +100,27 @@ cp apps/api/.env.example apps/api/.env
 
 OPENAI_API_KEY=sk-... docker compose up --build
 
-# Seed (em outro terminal):
+# Seed em outro terminal:
 docker exec trilhas_api npx tsx prisma/seed.ts
 
-# Acesse:
-# Frontend: http://localhost:3000
-# API:      http://localhost:3001/health
+# Acesse: http://localhost:3000
 ```
-
-## Credenciais de teste
-
-| Perfil      | E-mail                      | Senha        |
-|-------------|-----------------------------|--------------|
-| SME         | sme@trilhas.edu.br          | Trilhas@2026 |
-| Coordenador | coord@trilhas.edu.br        | Trilhas@2026 |
-| Diretora    | diretora@trilhas.edu.br     | Trilhas@2026 |
-| Professora  | prof@trilhas.edu.br         | Trilhas@2026 |
-| Corregente  | corregente@trilhas.edu.br   | Trilhas@2026 |
 
 ---
 
 ## Troubleshooting
 
-**"SECURITY VULNERABILITIES DETECTED" no Railway**
-→ Root Directory não está configurado como `apps/api`.
-  Railway está lendo o `package-lock.json` da raiz que contém o Next.js (frontend).
-  Configure Root Directory = `apps/api` no painel do Railway.
+**"Processing deployment..." para sempre**
+→ Build/Start Command não estão configurados.
+  Configure em Settings → Build Command e Start Command conforme acima.
 
-**"No Output Directory named public" no Vercel**
-→ Root Directory não está configurado como `apps/web` no painel do Vercel.
+**"SECURITY VULNERABILITIES DETECTED"**
+→ Root Directory está errado (provavelmente na raiz do monorepo).
+  Configure Root Directory = `apps/api` (sem barra).
+
+**"Can't reach database server"**
+→ `DATABASE_URL` não está configurada ou aponta para o host errado.
+  Copie direto do PostgreSQL plugin em Railway → Connect.
 
 **CORS error no browser**
-→ Verifique se `FRONTEND_URL` na Railway tem o domínio exato do Vercel (sem barra final).
-
-**Prisma: "Can't reach database server"**
-→ Confira se `DATABASE_URL` está com as credenciais corretas do PostgreSQL plugin da Railway.
-
-**Parecer IA não gera**
-→ Verifique `OPENAI_API_KEY` na Railway e se a chave tem créditos disponíveis.
+→ `FRONTEND_URL` na Railway precisa ser exatamente `https://seu-app.vercel.app` (sem barra no final).
