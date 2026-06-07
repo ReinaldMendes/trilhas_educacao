@@ -63,7 +63,7 @@ Root Directory:  apps/web       ← OBRIGATÓRIO
 Framework:       Next.js        ← detectado automaticamente
 ```
 
-4. Variáveis de ambiente:
+4. Variáveis de ambiente::
 
 ```
 NEXT_PUBLIC_API_URL = https://sua-api.railway.app
