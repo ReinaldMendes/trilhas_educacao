@@ -1,0 +1,282 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  professor
+  corregente
+  coordenador
+  diretora
+  sme
+}
+
+enum PlanejamentoStatus {
+  rascunho
+  enviado
+  vistado
+  devolvido
+}
+
+enum TipoVinculo {
+  regente
+  corregente
+}
+
+enum ModalidadeProposta {
+  dirigida
+  livre
+  externa
+}
+
+enum TipoProposta {
+  escrita
+  leitura
+  jogo
+  brincadeira
+  arte
+  musica
+  movimento
+  exploracao
+  experiencia
+  roda_conversa
+  outro
+}
+
+enum ParecerStatus {
+  rascunho
+  finalizado
+}
+
+enum TipoUnidade {
+  cmei
+  escola
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  turmaVinculos     ProfessorTurma[]
+  planejamentos     Planejamento[]
+  registros         Registro[]
+  pareceres         Parecer[]
+  auditLogs         AuditLog[]
+  refreshTokens     RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Unidade {
+  id        String      @id @default(uuid())
+  name      String
+  type      TipoUnidade
+  address   String?
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  turmas    Turma[]
+  coordenadores UnidadeUser[]
+
+  @@map("unidades")
+}
+
+model UnidadeUser {
+  unidadeId String  @map("unidade_id")
+  userId    String  @map("user_id")
+  unidade   Unidade @relation(fields: [unidadeId], references: [id], onDelete: Cascade)
+
+  @@id([unidadeId, userId])
+  @@map("unidade_users")
+}
+
+model Turma {
+  id         String   @id @default(uuid())
+  name       String
+  year       Int
+  unidadeId  String   @map("unidade_id")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  unidade    Unidade          @relation(fields: [unidadeId], references: [id])
+  alunos     Aluno[]
+  vinculos   ProfessorTurma[]
+  planejamentos Planejamento[]
+  registros  Registro[]
+
+  @@map("turmas")
+}
+
+model Aluno {
+  id        String   @id @default(uuid())
+  name      String
+  birthDate DateTime? @map("birth_date")
+  turmaId   String   @map("turma_id")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  turma     Turma     @relation(fields: [turmaId], references: [id])
+  registros Registro[]
+  pareceres Parecer[]
+
+  @@map("alunos")
+}
+
+model ProfessorTurma {
+  id          String      @id @default(uuid())
+  professorId String      @map("professor_id")
+  turmaId     String      @map("turma_id")
+  tipoVinculo TipoVinculo @default(regente) @map("tipo_vinculo")
+  dataInicio  DateTime    @default(now()) @map("data_inicio")
+  dataFim     DateTime?   @map("data_fim")
+  ativo       Boolean     @default(true)
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  professor User  @relation(fields: [professorId], references: [id])
+  turma     Turma @relation(fields: [turmaId], references: [id])
+
+  @@map("professor_turmas")
+}
+
+model Planejamento {
+  id                String              @id @default(uuid())
+  professorId       String              @map("professor_id")
+  turmaId           String              @map("turma_id")
+  weekStart         DateTime            @map("week_start")
+  camposExperiencia Json                @default("[]") @map("campos_experiencia")
+  objetivos         String?
+  conteudos         String?
+  mobilizacao       String?
+  desenvolvimentoPropostas String?      @map("desenvolvimento_propostas")
+  anotacoesFinais   String?             @map("anotacoes_finais")
+  status            PlanejamentoStatus  @default(rascunho)
+  coordenadorVisto  Boolean             @default(false) @map("coordenador_visto")
+  coordenadorObs    String?             @map("coordenador_obs")
+  vistadoPor        String?             @map("vistado_por")
+  geradoEmSubst     Boolean             @default(false) @map("gerado_em_substituicao")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  professor  User      @relation(fields: [professorId], references: [id])
+  turma      Turma     @relation(fields: [turmaId], references: [id])
+  propostas  Proposta[]
+
+  @@map("planejamentos")
+}
+
+model Proposta {
+  id              String             @id @default(uuid())
+  planejamentoId  String             @map("planejamento_id")
+  dayOfWeek       Int                @map("day_of_week")
+  tipo            TipoProposta
+  descricao       String
+  modalidade      ModalidadeProposta
+
+  planejamento Planejamento @relation(fields: [planejamentoId], references: [id], onDelete: Cascade)
+
+  @@map("propostas")
+}
+
+model Registro {
+  id             String   @id @default(uuid())
+  professorId    String   @map("professor_id")
+  alunoId        String   @map("aluno_id")
+  turmaId        String   @map("turma_id")
+  date           DateTime
+  observacao     String
+  coordenadorObs String?  @map("coordenador_obs")
+  vistado        Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  professor User            @relation(fields: [professorId], references: [id])
+  aluno     Aluno           @relation(fields: [alunoId], references: [id])
+  turma     Turma           @relation(fields: [turmaId], references: [id])
+  anexos    RegistroAnexo[]
+
+  @@map("registros")
+}
+
+model RegistroAnexo {
+  id          String   @id @default(uuid())
+  registroId  String   @map("registro_id")
+  filename    String
+  mimeType    String   @map("mime_type")
+  storageUrl  String   @map("storage_url")
+  sizeBytes   Int      @map("size_bytes")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  registro Registro @relation(fields: [registroId], references: [id], onDelete: Cascade)
+
+  @@map("registro_anexos")
+}
+
+model Parecer {
+  id          String        @id @default(uuid())
+  professorId String        @map("professor_id")
+  alunoId     String        @map("aluno_id")
+  period      String
+  textIa      String?       @map("text_ia")
+  textFinal   String?       @map("text_final")
+  header      String?
+  intro       String?
+  pdfUrl      String?       @map("pdf_url")
+  status      ParecerStatus @default(rascunho)
+  geradoEmSubst Boolean     @default(false) @map("gerado_em_substituicao")
+  substitutoPor String?     @map("substituto_por")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  professor User  @relation(fields: [professorId], references: [id])
+  aluno     Aluno @relation(fields: [alunoId], references: [id])
+
+  @@map("pareceres")
+}
+
+model Notificacao {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("notificacoes")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}

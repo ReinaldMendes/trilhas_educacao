@@ -1,0 +1,71 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL ────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: trilhas_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trilhas
+      POSTGRES_PASSWORD: trilhas@2026
+      POSTGRES_DB: trilhas_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U trilhas -d trilhas_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── API (Node/Express) ────────────────────────────────────
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: trilhas_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://trilhas:trilhas@2026@postgres:5432/trilhas_db
+      JWT_SECRET: trilhas-super-secret-jwt-key-2026-change-in-prod
+      JWT_REFRESH_SECRET: trilhas-super-secret-refresh-2026-change-in-prod
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      FRONTEND_URL: http://localhost:3000
+      API_URL: http://localhost:3001
+      PORT: 3001
+      NODE_ENV: production
+    ports:
+      - '3001:3001'
+    volumes:
+      - api_uploads:/app/uploads
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Web (Next.js) ─────────────────────────────────────────
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3001
+    container_name: trilhas_web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - '3000:3000'
+
+volumes:
+  postgres_data:
+  api_uploads:
