@@ -125,10 +125,17 @@ router.post('/', authorize('professor','corregente','coordenador'), async (req: 
   const role = req.user!.role
   const isSubst = role === 'coordenador'
 
+  const { alunoId, period, textIa, textFinal, header, intro, status } = parse.data
   const parecer = await prisma.parecer.create({
     data: {
-      ...parse.data,
       professorId: req.user!.sub,
+      alunoId: alunoId as string,
+      period,
+      textIa: textIa ?? null,
+      textFinal,
+      header: header ?? null,
+      intro: intro ?? null,
+      status,
       geradoEmSubst: isSubst,
       substitutoPor: isSubst ? req.user!.name : null,
     },

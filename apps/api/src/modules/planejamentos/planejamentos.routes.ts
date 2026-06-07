@@ -80,7 +80,14 @@ router.post('/', authorize('professor','corregente','coordenador'), async (req: 
       weekStart: new Date(data.weekStart),
       professorId: req.user!.sub,
       status: 'enviado',
-      propostas: { create: propostas },
+      propostas: {
+        create: propostas.map((p) => ({
+          dayOfWeek: p.dayOfWeek as number,
+          tipo: p.tipo as any,
+          descricao: p.descricao as string,
+          modalidade: p.modalidade as any,
+        })),
+      },
     },
     include: { propostas: true },
   })
