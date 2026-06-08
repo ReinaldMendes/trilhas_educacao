@@ -1,16 +1,10 @@
-# ─── Trilhas da Infância — API (Railway) ───────────────────
-# Root Directory no painel Railway: apps/api  (SEM barra inicial)
-# Builder: Railpack (padrão) — NÃO selecionar Dockerfile
-
 [build]
-# Railpack detecta Node.js automaticamente
-# Build command: compila TypeScript + gera Prisma client
-buildCommand = "npm install && npx prisma generate && npm run build"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-# Start: roda migrations e sobe o servidor
-startCommand = "npx prisma migrate deploy && node dist/server.js"
+startCommand = "npx prisma db push --accept-data-loss && node dist/server.js"
 healthcheckPath = "/health"
-healthcheckTimeout = 120
+healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
