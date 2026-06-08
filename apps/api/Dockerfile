@@ -22,11 +22,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY package.json ./
+COPY entrypoint.sh ./
 
-RUN mkdir -p uploads
+RUN mkdir -p uploads && chmod +x entrypoint.sh
 
-EXPOSE 3001
+# Railway injects $PORT dynamically — do NOT hardcode EXPOSE
+# EXPOSE is just documentation; the actual port comes from $PORT env var
 
-# prisma db push: syncs schema to DB without needing migration history
-# --accept-data-loss only needed if columns are removed (safe for initial deploy)
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/server.js"]
+ENTRYPOINT ["./entrypoint.sh"]

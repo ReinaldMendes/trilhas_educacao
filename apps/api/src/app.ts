@@ -16,6 +16,12 @@ import dashboardRoutes from './modules/dashboards/dashboards.routes'
 
 const app = express()
 
+// ── Health check — FIRST, before all middleware ──────────
+// Must respond immediately for Railway healthcheck to pass
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok', service: 'trilhas-api', time: new Date().toISOString() })
+})
+
 // ── Security ────────────────────────────────────────────
 app.use(helmet())
 app.use(cors({
@@ -46,10 +52,7 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined'))
 }
 
-// ── Health check ─────────────────────────────────────────
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'trilhas-api', time: new Date().toISOString() })
-})
+
 
 // ── Routes ───────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes)
