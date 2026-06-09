@@ -1,30 +1,30 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine
 WORKDIR /app
-# openssl for Prisma, postgresql-client for psql (used in entrypoint to clean migrations)
+
+# System deps
 RUN apk add --no-cache openssl postgresql-client
 
-# ── Install dependencies ──────────────────────────────────
-FROM base AS deps
+# Copy package manifest and install all deps (including devDeps for prisma CLI)
 COPY package.json ./
-RUN npm install --frozen-lockfile
+RUN npm install
 
-# ── Generate Prisma client + Build TypeScript ─────────────
-FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+# Copy source and prisma schema
+COPY prisma/schema.prisma ./prisma/schema.prisma
+COPY src ./src
+COPY tsconfig.json ./
+
+# Generate Prisma client (needs network — runs at build time with full internet)
 RUN npx prisma generate
+
+# Compile TypeScript to dist/
 RUN npm run build
 
-# ── Production image ──────────────────────────────────────
-FROM base AS runner
-ENV NODE_ENV=production
-
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
-COPY package.json ./
+# Copy entrypoint
 COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
-RUN mkdir -p uploads && chmod +x entrypoint.sh
+RUN mkdir -p uploads
+
+ENV NODE_ENV=production
 
 ENTRYPOINT ["./entrypoint.sh"]

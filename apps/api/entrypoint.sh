@@ -1,24 +1,28 @@
 #!/bin/sh
 set -e
 
-echo "🌿 Trilhas API starting..."
-echo "   PORT=${PORT:-3001}  NODE_ENV=${NODE_ENV:-production}"
+echo "=========================================="
+echo " Trilhas da Infância API"
+echo " PORT=${PORT:-3001}"
+echo " NODE_ENV=${NODE_ENV:-production}"
+echo "=========================================="
 
-[ -z "$DATABASE_URL" ] && echo "❌ DATABASE_URL not set" && exit 1
+# Validate required env vars
+if [ -z "$DATABASE_URL" ]; then
+  echo "FATAL: DATABASE_URL is not set"
+  exit 1
+fi
 
-# ── Wipe failed migration record directly in PostgreSQL ───
-# The _prisma_migrations table has a failed '20260601000000_init' row.
-# Delete it so db push runs cleanly. Safe to run every deploy.
-echo "⏳ Clearing stale migration records..."
-psql "$DATABASE_URL" -c \
-  "DELETE FROM _prisma_migrations WHERE applied_steps_count = 0 OR finished_at IS NULL;" \
-  2>/dev/null && echo "✅ Migration table cleaned" || echo "ℹ️  _prisma_migrations not found yet (first deploy)"
+echo "[1/3] Cleaning stale migration records..."
+psql "$DATABASE_URL" \
+  -c "DELETE FROM _prisma_migrations WHERE finished_at IS NULL;" \
+  2>/dev/null \
+  && echo "      Done" \
+  || echo "      Skipped (table may not exist yet)"
 
-# ── Sync schema (idempotent, no migration history needed) ─
-echo "⏳ Syncing database schema with db push..."
+echo "[2/3] Syncing database schema..."
 npx prisma db push --accept-data-loss --skip-generate
-echo "✅ Database ready"
+echo "      Done"
 
-# ── Start server ──────────────────────────────────────────
-echo "🚀 Starting on 0.0.0.0:${PORT:-3001}..."
+echo "[3/3] Starting Node.js server..."
 exec node dist/server.js
