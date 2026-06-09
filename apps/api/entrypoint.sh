@@ -3,27 +3,21 @@ set -e
 
 echo "🌿 Trilhas API starting..."
 echo "   PORT: ${PORT:-3001}"
-echo "   NODE_ENV: ${NODE_ENV:-development}"
+echo "   NODE_ENV: ${NODE_ENV:-production}"
+echo "   DATABASE_URL set: $([ -n "$DATABASE_URL" ] && echo yes || echo NO - MISSING)"
 
-# Run prisma db push in background FIRST so server can start immediately
-# This prevents healthcheck timeout during DB schema sync
-echo "⏳ Running database schema sync in background..."
-npx prisma db push --accept-data-loss --skip-generate 2>&1 &
-DB_PUSH_PID=$!
+# ── Database setup ────────────────────────────────────────
+# Strategy: use ONLY prisma db push (idempotent, safe to run on existing DB)
+# This avoids migration history conflicts entirely.
+#
+# If there's a stuck migration in _prisma_migrations table, resolve it first.
+echo "⏳ Resolving any stuck migrations..."
+npx prisma migrate resolve --rolled-back 20260601000000_init 2>/dev/null || true
 
-# Start server immediately so healthcheck passes
-echo "🚀 Starting server..."
-node dist/server.js &
-SERVER_PID=$!
+echo "⏳ Syncing database schema..."
+npx prisma db push --accept-data-loss --skip-generate
+echo "✅ Database ready"
 
-# Wait for db push to complete
-wait $DB_PUSH_PID
-DB_EXIT=$?
-if [ $DB_EXIT -ne 0 ]; then
-  echo "⚠️  prisma db push failed with code $DB_EXIT — server may work if tables already exist"
-else
-  echo "✅ Database schema synced"
-fi
-
-# Wait for server process
-wait $SERVER_PID
+# ── Start server ──────────────────────────────────────────
+echo "🚀 Starting server on 0.0.0.0:${PORT:-3001}..."
+exec node dist/server.js

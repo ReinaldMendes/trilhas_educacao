@@ -20,13 +20,13 @@ ENV NODE_ENV=production
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 COPY package.json ./
 COPY entrypoint.sh ./
 
 RUN mkdir -p uploads && chmod +x entrypoint.sh
 
-# Railway injects $PORT dynamically — do NOT hardcode EXPOSE
-# EXPOSE is just documentation; the actual port comes from $PORT env var
+# NOTE: NOT copying prisma/migrations — we use db push only
+# This prevents migration history conflicts on existing databases
 
 ENTRYPOINT ["./entrypoint.sh"]
