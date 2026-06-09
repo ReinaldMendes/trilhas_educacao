@@ -1,6 +1,7 @@
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache openssl
+# openssl for Prisma, postgresql-client for psql (used in entrypoint to clean migrations)
+RUN apk add --no-cache openssl postgresql-client
 
 # ── Install dependencies ──────────────────────────────────
 FROM base AS deps
@@ -25,8 +26,5 @@ COPY package.json ./
 COPY entrypoint.sh ./
 
 RUN mkdir -p uploads && chmod +x entrypoint.sh
-
-# NOTE: NOT copying prisma/migrations — we use db push only
-# This prevents migration history conflicts on existing databases
 
 ENTRYPOINT ["./entrypoint.sh"]

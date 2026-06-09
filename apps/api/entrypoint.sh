@@ -2,22 +2,23 @@
 set -e
 
 echo "🌿 Trilhas API starting..."
-echo "   PORT: ${PORT:-3001}"
-echo "   NODE_ENV: ${NODE_ENV:-production}"
-echo "   DATABASE_URL set: $([ -n "$DATABASE_URL" ] && echo yes || echo NO - MISSING)"
+echo "   PORT=${PORT:-3001}  NODE_ENV=${NODE_ENV:-production}"
 
-# ── Database setup ────────────────────────────────────────
-# Strategy: use ONLY prisma db push (idempotent, safe to run on existing DB)
-# This avoids migration history conflicts entirely.
-#
-# If there's a stuck migration in _prisma_migrations table, resolve it first.
-echo "⏳ Resolving any stuck migrations..."
-npx prisma migrate resolve --rolled-back 20260601000000_init 2>/dev/null || true
+[ -z "$DATABASE_URL" ] && echo "❌ DATABASE_URL not set" && exit 1
 
-echo "⏳ Syncing database schema..."
+# ── Wipe failed migration record directly in PostgreSQL ───
+# The _prisma_migrations table has a failed '20260601000000_init' row.
+# Delete it so db push runs cleanly. Safe to run every deploy.
+echo "⏳ Clearing stale migration records..."
+psql "$DATABASE_URL" -c \
+  "DELETE FROM _prisma_migrations WHERE applied_steps_count = 0 OR finished_at IS NULL;" \
+  2>/dev/null && echo "✅ Migration table cleaned" || echo "ℹ️  _prisma_migrations not found yet (first deploy)"
+
+# ── Sync schema (idempotent, no migration history needed) ─
+echo "⏳ Syncing database schema with db push..."
 npx prisma db push --accept-data-loss --skip-generate
 echo "✅ Database ready"
 
 # ── Start server ──────────────────────────────────────────
-echo "🚀 Starting server on 0.0.0.0:${PORT:-3001}..."
+echo "🚀 Starting on 0.0.0.0:${PORT:-3001}..."
 exec node dist/server.js
