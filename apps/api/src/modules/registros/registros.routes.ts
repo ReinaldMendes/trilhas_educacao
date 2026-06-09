@@ -12,7 +12,11 @@ router.use(authenticate)
 
 // Local storage for dev; swap with S3 in prod
 const uploadDir = path.join(process.cwd(), 'uploads')
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+try {
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+} catch (e) {
+  console.warn('[registros] Could not create uploads dir:', e)
+}
 
 const storage = multer.diskStorage({
   destination: uploadDir,
