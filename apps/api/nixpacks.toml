@@ -1,6 +1,6 @@
-# Fallback for Railway Nixpacks/Railpack detection
+# Fallback config — main config is Dockerfile + entrypoint.sh
 [phases.setup]
-nixPkgs = ["nodejs_20", "openssl"]
+nixPkgs = ["nodejs_20", "openssl", "postgresql"]
 
 [phases.install]
 cmds = ["npm install"]
@@ -12,4 +12,4 @@ cmds = [
 ]
 
 [start]
-cmd = "npx prisma migrate deploy && node dist/server.js"
+cmd = "sh entrypoint.sh"
