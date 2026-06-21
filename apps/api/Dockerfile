@@ -30,7 +30,6 @@ COPY --from=builder /app/dist ./dist
 RUN mkdir -p uploads
 
 ENV NODE_ENV=production
-ENV PORT=3001
 
 EXPOSE 3001
 

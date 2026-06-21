@@ -16,20 +16,33 @@ import dashboardRoutes from './modules/dashboards/dashboards.routes'
 
 const app = express()
 
-// ── Health check — FIRST, before all middleware ──────────
-// Must respond immediately for Railway healthcheck to pass
+// ── Health check — registrado ANTES de qualquer middleware ───────────────────
+// O Railway bate nessa rota para saber se o serviço está vivo.
+// Não pode depender de CORS, helmet, auth, ou qualquer outro middleware.
 app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok', service: 'trilhas-api', time: new Date().toISOString() })
+  console.log('[HEALTH] ping received')
+  res.status(200).json({ status: 'ok', service: 'trilhas-api', ts: Date.now() })
 })
 
-// ── Security ────────────────────────────────────────────
+// ── Security ─────────────────────────────────────────────────────────────────
 app.use(helmet())
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'http://localhost:3000',
+  'http://localhost:3001',
+]
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, cb) => {
+    // Permite requisições sem origin (healthcheck, curl, Postman)
+    if (!origin) return cb(null, true)
+    if (allowedOrigins.some(o => origin.startsWith(o))) return cb(null, true)
+    cb(new Error(`CORS bloqueado: ${origin}`))
+  },
   credentials: true,
 }))
 
-// ── Rate limiting ────────────────────────────────────────
+// ── Rate limiting ─────────────────────────────────────────────────────────────
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
@@ -44,7 +57,7 @@ const authLimiter = rateLimit({
   message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
 })
 
-// ── Middleware ───────────────────────────────────────────
+// ── Body / logging ────────────────────────────────────────────────────────────
 app.use(compression())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
@@ -52,9 +65,7 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined'))
 }
 
-
-
-// ── Routes ───────────────────────────────────────────────
+// ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/turmas', turmaRoutes)
@@ -64,14 +75,14 @@ app.use('/api/registros', registroRoutes)
 app.use('/api/pareceres', parecerRoutes)
 app.use('/api/dashboards', dashboardRoutes)
 
-// ── 404 handler ─────────────────────────────────────────
+// ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' })
 })
 
-// ── Error handler ────────────────────────────────────────
+// ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err.stack)
+  console.error('[ERROR]', err.stack)
   res.status(500).json({ error: 'Erro interno do servidor' })
 })
 

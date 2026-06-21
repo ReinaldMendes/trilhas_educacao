@@ -10,7 +10,7 @@
 ```
 Source Repo:       ReinaldMendes/trilhas_educacao
 Root Directory:    apps/api          ← SEM barra inicial (não /apps/api)
-Branch:            mainn
+Branch:            main
 ```
 
 #### 🔨 Build (aba Build)
