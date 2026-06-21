@@ -1,5 +1,4 @@
 'use client'
-import Cookies from 'js-cookie'
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileText, Plus, Sparkles, Save, ChevronLeft, Download, ChevronRight, CheckCircle } from 'lucide-react'
@@ -65,7 +64,7 @@ export default function PareceresPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Cookies.get('access_token') || ''}`,
+          'Authorization': `Bearer ${document.cookie.match(/access_token=([^;]+)/)?.[1] || ''}`,
         },
         body: JSON.stringify({ alunoId: selectedAluno, period: selectedPeriod, registroIds: selectedRegistros }),
       })
