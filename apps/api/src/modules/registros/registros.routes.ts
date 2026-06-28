@@ -1,35 +1,45 @@
 import { Router, Response } from 'express'
 import { z } from 'zod'
 import multer from 'multer'
-import path from 'path'
-import fs from 'fs'
+import { Readable } from 'stream'
 import prisma from '../../config/prisma'
+import cloudinary from '../../config/cloudinary'
 import { authenticate, authorize, AuthRequest } from '../../middleware/auth.middleware'
 import { audit } from '../../utils/audit'
 
 const router = Router()
 router.use(authenticate)
 
-// Local storage for dev; swap with S3 in prod
-const uploadDir = path.join(process.cwd(), 'uploads')
-try {
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
-} catch (e) {
-  console.warn('[registros] Could not create uploads dir:', e)
-}
-
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (_req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
-})
+// Multer com memoryStorage — arquivo vai direto para o Cloudinary, sem disco
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (_req, file, cb) => {
-    const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf','video/mp4']
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'video/mp4']
     cb(null, allowed.includes(file.mimetype))
   },
 })
+
+async function uploadToCloudinary(buffer: Buffer, mimetype: string, originalname: string): Promise<{ url: string; publicId: string }> {
+  return new Promise((resolve, reject) => {
+    const resourceType = mimetype.startsWith('video/') ? 'video' : mimetype === 'application/pdf' ? 'raw' : 'image'
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'trilhas_educacao/registros',
+        resource_type: resourceType,
+        public_id: `${Date.now()}-${originalname.replace(/[^a-zA-Z0-9.]/g, '_')}`,
+      },
+      (err, result) => {
+        if (err || !result) return reject(err || new Error('Cloudinary upload failed'))
+        resolve({ url: result.secure_url, publicId: result.public_id })
+      }
+    )
+    const readable = new Readable()
+    readable.push(buffer)
+    readable.push(null)
+    readable.pipe(uploadStream)
+  })
+}
 
 const registroSchema = z.object({
   alunoId: z.string().uuid(),
@@ -44,7 +54,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   const role = req.user!.role
   const userId = req.user!.sub
 
-  let where: any = {}
+  const where: any = {}
   if (alunoId) where.alunoId = alunoId
   if (turmaId) where.turmaId = turmaId
   if (role === 'professor' || role === 'corregente') where.professorId = userId
@@ -77,13 +87,26 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/registros
-router.post('/', authorize('professor','corregente'), upload.array('anexos', 5), async (req: AuthRequest, res: Response) => {
+router.post('/', authorize('professor', 'corregente'), upload.array('anexos', 5), async (req: AuthRequest, res: Response) => {
   const parse = registroSchema.safeParse(req.body)
   if (!parse.success) return res.status(400).json({ error: 'Dados inválidos', details: parse.error.flatten() })
 
   const { alunoId, turmaId, date, observacao } = parse.data
-  const files = req.files as Express.Multer.File[]
-  const baseUrl = process.env.API_URL || `http://localhost:3001`
+  const files = (req.files as Express.Multer.File[]) || []
+
+  // Upload de cada arquivo para o Cloudinary
+  const anexosData = await Promise.all(
+    files.map(async (f) => {
+      const { url, publicId } = await uploadToCloudinary(f.buffer, f.mimetype, f.originalname)
+      return {
+        filename: f.originalname,
+        mimeType: f.mimetype,
+        storageUrl: url,
+        publicId,
+        sizeBytes: f.size,
+      }
+    })
+  )
 
   const registro = await prisma.registro.create({
     data: {
@@ -93,11 +116,11 @@ router.post('/', authorize('professor','corregente'), upload.array('anexos', 5),
       date: new Date(date),
       observacao,
       anexos: {
-        create: files.map((f) => ({
-          filename: f.originalname,
-          mimeType: f.mimetype,
-          storageUrl: `${baseUrl}/uploads/${f.filename}`,
-          sizeBytes: f.size,
+        create: anexosData.map(({ filename, mimeType, storageUrl, sizeBytes }) => ({
+          filename,
+          mimeType,
+          storageUrl,
+          sizeBytes,
         })),
       },
     },
@@ -108,8 +131,8 @@ router.post('/', authorize('professor','corregente'), upload.array('anexos', 5),
   res.status(201).json(registro)
 })
 
-// PATCH /api/registros/:id/comentario  (coord/diretora)
-router.patch('/:id/comentario', authorize('coordenador','diretora'), async (req: AuthRequest, res: Response) => {
+// PATCH /api/registros/:id/comentario
+router.patch('/:id/comentario', authorize('coordenador', 'diretora'), async (req: AuthRequest, res: Response) => {
   const { coordenadorObs, vistado } = req.body
   const registro = await prisma.registro.update({
     where: { id: req.params.id },
@@ -119,7 +142,6 @@ router.patch('/:id/comentario', authorize('coordenador','diretora'), async (req:
     },
   })
 
-  // Notificar professor
   await prisma.notificacao.create({
     data: {
       userId: registro.professorId,
@@ -131,11 +153,6 @@ router.patch('/:id/comentario', authorize('coordenador','diretora'), async (req:
 
   await audit(req, 'COMENTARIO', 'registro', registro.id)
   res.json(registro)
-})
-
-// Serve uploads (dev only)
-router.use('/files', (req, res) => {
-  res.sendFile(path.join(uploadDir, req.path))
 })
 
 export default router

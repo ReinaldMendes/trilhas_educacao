@@ -7,6 +7,7 @@ import { rateLimit } from 'express-rate-limit'
 
 import authRoutes from './modules/auth/auth.routes'
 import userRoutes from './modules/users/users.routes'
+import unidadeRoutes from './modules/unidades/unidades.routes'
 import turmaRoutes from './modules/turmas/turmas.routes'
 import alunoRoutes from './modules/alunos/alunos.routes'
 import planejamentoRoutes from './modules/planejamentos/planejamentos.routes'
@@ -16,9 +17,7 @@ import dashboardRoutes from './modules/dashboards/dashboards.routes'
 
 const app = express()
 
-// ── Health check — registrado ANTES de qualquer middleware ───────────────────
-// O Railway bate nessa rota para saber se o serviço está vivo.
-// Não pode depender de CORS, helmet, auth, ou qualquer outro middleware.
+// ── Health check — antes de qualquer middleware ──────────────────────────────
 app.get('/health', (_req, res) => {
   console.log('[HEALTH] ping received')
   res.status(200).json({ status: 'ok', service: 'trilhas-api', ts: Date.now() })
@@ -34,7 +33,6 @@ const allowedOrigins = [
 ]
 app.use(cors({
   origin: (origin, cb) => {
-    // Permite requisições sem origin (healthcheck, curl, Postman)
     if (!origin) return cb(null, true)
     if (allowedOrigins.some(o => origin.startsWith(o))) return cb(null, true)
     cb(new Error(`CORS bloqueado: ${origin}`))
@@ -43,17 +41,11 @@ app.use(cors({
 }))
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
-const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-})
+const limiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false })
 app.use(limiter)
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
+  windowMs: 15 * 60 * 1000, max: 20,
   message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
 })
 
@@ -61,13 +53,12 @@ const authLimiter = rateLimit({
 app.use(compression())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
-if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan('combined'))
-}
+if (process.env.NODE_ENV !== 'test') app.use(morgan('combined'))
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes)
 app.use('/api/users', userRoutes)
+app.use('/api/unidades', unidadeRoutes)
 app.use('/api/turmas', turmaRoutes)
 app.use('/api/alunos', alunoRoutes)
 app.use('/api/planejamentos', planejamentoRoutes)
@@ -76,9 +67,7 @@ app.use('/api/pareceres', parecerRoutes)
 app.use('/api/dashboards', dashboardRoutes)
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Rota não encontrada' })
-})
+app.use((_req, res) => res.status(404).json({ error: 'Rota não encontrada' }))
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
