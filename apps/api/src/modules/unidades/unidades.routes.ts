@@ -54,7 +54,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 router.post('/', authorize('sme'), async (req: AuthRequest, res: Response) => {
   const parse = unidadeSchema.safeParse(req.body)
   if (!parse.success) return res.status(400).json({ error: 'Dados inválidos', details: parse.error.flatten() })
-  const unidade = await prisma.unidade.create({ data: parse.data })
+  const unidade = await prisma.unidade.create({ data: parse.data as any })
   await audit(req, 'CREATE', 'unidade', unidade.id)
   res.status(201).json(unidade)
 })
