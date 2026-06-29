@@ -61,9 +61,15 @@ router.post('/', authorize('sme'), async (req: AuthRequest, res: Response) => {
 
 // PATCH /api/unidades/:id — SME edita
 router.patch('/:id', authorize('sme'), async (req: AuthRequest, res: Response) => {
-  const parse = unidadeSchema.partial().extend({ active: z.boolean().optional() }).safeParse(req.body)
+  const parse = z.object({
+    name: z.string().min(3).optional(),
+    type: z.enum(['cmei', 'escola']).optional(),
+    address: z.string().optional(),
+    active: z.boolean().optional(),
+  }).safeParse(req.body)
   if (!parse.success) return res.status(400).json({ error: 'Dados inválidos' })
-  const unidade = await prisma.unidade.update({ where: { id: req.params.id }, data: parse.data })
+  const data = parse.data as any
+  const unidade = await prisma.unidade.update({ where: { id: req.params.id }, data })
   await audit(req, 'UPDATE', 'unidade', unidade.id)
   res.json(unidade)
 })
